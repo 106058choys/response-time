@@ -35,12 +35,17 @@ window.addEventListener('DOMContentLoaded', async function() {
             const selectedWeight = document.querySelector('input[name="weight"]:checked');
             
             if (selectedWeight) {
-                console.log('Selected Weight:', selectedWeight.value);
+                const weightValue = parseInt(selectedWeight.value, 10);
                 const [keyword1, keyword2] = keywordPairs[currentPairIndex];
+
+                const k1Weight = weightValue < 0 ? Math.abs(weightValue) : 1 / Math.abs(weightValue);
+                const k2Weight = weightValue > 0 ? Math.abs(weightValue) : 1 / Math.abs(weightValue);
+
                 weights.push({
                     keyword1,
+                    k1Weight,
                     keyword2,
-                    weight: selectedWeight.value
+                    k2Weight
                 });
 
                 currentPairIndex++;
@@ -138,20 +143,32 @@ window.addEventListener('DOMContentLoaded', async function() {
     if (currentPage.includes('complete.html')) {
         const storedWeights = localStorage.getItem('weights');
         const weights = storedWeights ? JSON.parse(storedWeights) : [];
-        
+        console.log("Loaded Weights:", weights);
+
         const storedResponseTimes = localStorage.getItem('responseTimes');
         const responseTimes = storedResponseTimes ? JSON.parse(storedResponseTimes) : [];
-
         console.log("Loaded Response Times:", responseTimes);
 
         const storedKeywords = localStorage.getItem('keywords');
         const keywords = storedKeywords ? JSON.parse(storedKeywords) : await loadKeywords();
+        console.log("Loaded Keywords:", keywords);
 
         const storedImages = localStorage.getItem('images');
         const images = storedImages ? JSON.parse(storedImages) : [];
+        console.log("Loaded Images:", images);
+
+        if (!keywords || keywords.length === 0) {
+            console.warn("Keywords data is empty or undefined:", keywords);
+        }
+        if (!weights || weights.length === 0) {
+            console.warn("Weights data is empty or undefined:", weights);
+        }
 
         const weightsMatrix = createComparisonMatrix(weights, keywords, "weight");
+        console.log("Weights Matrix:", weightsMatrix);
+
         const keywordEigenvector = calculateEigenvector(weightsMatrix);
+        console.log("Keyword Eigenvector:", keywordEigenvector);
 
         const keywordResponseEigenvector = keywords.map((keyword) => {
             const keywordData = responseTimes.filter(time => time.keyword === keyword);
@@ -170,9 +187,9 @@ window.addEventListener('DOMContentLoaded', async function() {
             const wb = XLSX.utils.book_new()
             
             // 1st 시트 - 키워드별 가중치
-            const weightSheetData = [["Keyword 1", "Keyword 2", "Weight"]];
+            const weightSheetData = [["Keyword 1", "K1 Weight", "Keyword 2", "K2 Weight"]];
             weights.forEach(entry => {
-                weightSheetData.push([entry.keyword1, entry.keyword2, entry.weight]);
+                weightSheetData.push([entry.keyword1, entry.k1Weight, entry.keyword2, entry.k2Weight]);
             });
             const ws1 = XLSX.utils.aoa_to_sheet(weightSheetData);
             XLSX.utils.book_append_sheet(wb, ws1, "Keyword Weight");
