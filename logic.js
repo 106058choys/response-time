@@ -183,47 +183,89 @@ window.addEventListener('DOMContentLoaded', async function() {
             }, 0);
         });
 
-        document.getElementById('downloadXlsxBtn').addEventListener('click', function() {
-            const wb = XLSX.utils.book_new()
-            
-            // 1st 시트 - 키워드별 가중치
-            const weightSheetData = [["Keyword 1", "K1 Weight", "Keyword 2", "K2 Weight"]];
-            weights.forEach(entry => {
-                weightSheetData.push([entry.keyword1, entry.k1Weight, entry.keyword2, entry.k2Weight]);
+        document.getElementById('downloadXlsxBtn').addEventListener('click', function () {
+            const wb = XLSX.utils.book_new();
+        
+            // Unified Data 시트 데이터 배열
+            const unifiedSheetData = [];
+        
+            // Unified Data 시트 생성
+            unifiedSheetData.push(["Weight Matrix"]);
+            unifiedSheetData.push(["", ...keywords, "Eigenvector"]);
+            const weightMatrix = createComparisonMatrix(weights, keywords, "weight");
+            const weightEigenvector = calculateEigenvector(weightMatrix);
+            weightMatrix.forEach((row, i) => {
+                unifiedSheetData.push([keywords[i], ...row, weightEigenvector[i]]);
             });
-            const ws1 = XLSX.utils.aoa_to_sheet(weightSheetData);
-            XLSX.utils.book_append_sheet(wb, ws1, "Keyword Weight");
-
-            // 2nd 시트 - 키워드별 이미지 응답 시간
-            const responseSheetData = [["Response Time(s)", "Left Image", "Right Image", "Selected Image", "Keyword"]];
-            responseTimes.forEach(entry => {
-                responseSheetData.push([entry.responseTime, entry.leftImage, entry.rightImage, entry.selectedImage, entry.keyword]);
-            });
-            const ws2 = XLSX.utils.aoa_to_sheet(responseSheetData);
-            XLSX.utils.book_append_sheet(wb, ws2, "Response Data");
-
-            // 3rd 시트 - 키워드 및 이미지의 eigenvector
-            const eigenvectorSheetData = [["Keyword/Image", "Eigenvector"]];
-            keywordEigenvector.forEach((value, index) => {
-                eigenvectorSheetData.push([`Keyword ${index + 1}`, value]);
-            });
-            keywordResponseEigenvector.forEach((eigenvector, index) => {
-                eigenvector.forEach((value, imgIndex) => {
-                    eigenvectorSheetData.push([`Image ${imgIndex + 1} (Keyword ${index + 1})`, value]);
+        
+            unifiedSheetData.push([]); // 빈 줄
+        
+            unifiedSheetData.push(["Response Matrices"]);
+            const keywordResponseEigenvector = [];
+            keywords.forEach(keyword => {
+                unifiedSheetData.push([`Keyword: ${keyword}`]);
+                unifiedSheetData.push(["", "Image 1", "Image 2", "Image 3", "Image 4", "Eigenvector"]);
+        
+                const keywordData = responseTimes.filter(time => time.keyword === keyword);
+                const responseMatrix = createComparisonMatrix(keywordData, images, "responseTime");
+                const responseEigenvector = calculateEigenvector(responseMatrix);
+                keywordResponseEigenvector.push(responseEigenvector);
+        
+                responseMatrix.forEach((row, i) => {
+                    unifiedSheetData.push([`Image ${i + 1}`, ...row, responseEigenvector[i]]);
                 });
+        
+                unifiedSheetData.push(["Eigenvector", ...responseEigenvector]);
+                unifiedSheetData.push([]);
             });
-            const ws3 = XLSX.utils.aoa_to_sheet(eigenvectorSheetData);
-            XLSX.utils.book_append_sheet(wb, ws3, "Eigenvectors");
-
-            // 4th 시트 - 각 이미지의 최종 imageScore
-            const imageScoresSheetData = [["Image", "Score"]];
-            imageScores.forEach((score, index) => {
-                imageScoresSheetData.push([`Image ${index + 1}`, score]);
+        
+            unifiedSheetData.push(["Image Scores"]);
+            unifiedSheetData.push(["Image", ...keywords.flatMap(keyword => [keyword, `${keyword} 가중치`]), "Score"]);
+        
+            images.forEach((_, imgIndex) => {
+                const keywordFields = keywords.flatMap((_, keywordIndex) => {
+                    const responseValue = keywordResponseEigenvector[keywordIndex]?.[imgIndex] || 0;
+                    const weightValue = weightEigenvector[keywordIndex] || 0;
+                    return [responseValue, weightValue];
+                });
+        
+                const totalScore = keywords.reduce((sum, _, keywordIndex) => {
+                    const responseValue = keywordResponseEigenvector[keywordIndex]?.[imgIndex] || 0;
+                    const weightValue = weightEigenvector[keywordIndex] || 0;
+                    return sum + responseValue * weightValue;
+                }, 0);
+        
+                unifiedSheetData.push([`Image ${imgIndex + 1}`, ...keywordFields, totalScore]);
             });
-            const ws4 = XLSX.utils.aoa_to_sheet(imageScoresSheetData);
-            XLSX.utils.book_append_sheet(wb, ws4, "Image Scores");
-
+        
+            const unifiedSheet = XLSX.utils.aoa_to_sheet(unifiedSheetData);
+            XLSX.utils.book_append_sheet(wb, unifiedSheet, "Unified Data");
+        
+            // Raw Data 시트 데이터 배열
+            const rawDataSheetData = [];
+        
+            // Raw Data 시트 생성
+            rawDataSheetData.push(["Keyword Weights"]);
+            rawDataSheetData.push(["Keyword 1", "K1 Weight", "Keyword 2", "K2 Weight"]);
+            weights.forEach(entry => {
+                rawDataSheetData.push([entry.keyword1, entry.k1Weight, entry.keyword2, entry.k2Weight]);
+            });
+        
+            rawDataSheetData.push([]); // 빈 줄 (가독성 확보)
+        
+            rawDataSheetData.push(["Response Times"]);
+            rawDataSheetData.push(["Response Time(s)", "Left Image", "Right Image", "Selected Image", "Keyword"]);
+            responseTimes.forEach(entry => {
+                rawDataSheetData.push([entry.responseTime, entry.leftImage, entry.rightImage, entry.selectedImage, entry.keyword]);
+            });
+        
+            rawDataSheetData.push([]); // 빈 줄 (가독성 확보)
+        
+            const rawDataSheet = XLSX.utils.aoa_to_sheet(rawDataSheetData);
+            XLSX.utils.book_append_sheet(wb, rawDataSheet, "Raw Data");
+        
+            // 파일 저장
             XLSX.writeFile(wb, 'result_data.xlsx');
-        });
+        });        
     }
 });
