@@ -4,33 +4,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>구매 기준 가중치</title>
+    <title>구매 기준 가중치 평가</title>
     <style>
         .container {
             text-align: center;
-            margin-top: 20px;
+            margin-top: 50px;
         }
         .keyword {
             display: inline-block;
-            padding: 10px;
-            margin: 20px;
-            border-radius: 50%;
+            padding: 40px 80px;
+            margin: 30px;
+            border-radius: 10px;
             background-color: #e0e0e0;
-            font-size: 24px;
-        }
-        .scale {
-            margin: 20px;
-        }
-        .scale input[type="radio"] {
-            display: none;
-        }
-        .scale label {
-            font-size: 20px;
-            margin: 10px;
+            font-size: 32px;
+            font-weight: bold;
             cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        .scale input[type="radio"]:checked + label {
-            color: red;
+        .keyword:hover {
+            background-color: #d0d0d0;
+            transform: scale(1.05); /* HOVER 시 약간 확대 효과 */
         }
     </style>
 </head>
@@ -39,23 +33,6 @@
         <h1>다음 중 어떤 것을 더 중요하게 생각하나요?</h1>
         <div class="keyword" id="keyword1"></div>
         <div class="keyword" id="keyword2"></div>
-        
-        <div class="scale">
-            <input type="radio" id="score1" name="weight" value="-7">
-            <label for="score1">7</label>
-            <input type="radio" id="score2" name="weight" value="-5">
-            <label for="score2">5</label>
-            <input type="radio" id="score3" name="weight" value="-3">
-            <label for="score3">3</label>
-            <input type="radio" id="score4" name="weight" value="1">
-            <label for="score4">1</label>
-            <input type="radio" id="score5" name="weight" value="3">
-            <label for="score5">3</label>
-            <input type="radio" id="score6" name="weight" value="5">
-            <label for="score6">5</label>
-            <input type="radio" id="score7" name="weight" value="7">
-            <label for="score7">7</label>
-        </div>
     </div>
 
     <!-- 순서대로 불러옴 (logic이 utils에 있는 함수를 참조함) -->

@@ -1,4 +1,5 @@
 // logic.js
+// 키워드 로드
 async function loadKeywords() {
     try {
         const response = await fetch('data/keywords.txt');
@@ -10,262 +11,252 @@ async function loadKeywords() {
     }
 }
 
-window.addEventListener('DOMContentLoaded', async function() {
+// 페이지 초기화
+async function initializePage() {
     const currentPage = window.location.pathname;
 
-    // index.html에서 실행되는 코드
-    if (currentPage.includes('index.html')) {
-        const keywords = await loadKeywords();
-        let keywordPairs = generateCombinations(keywords);
-        let weights = [];
-        let currentPairIndex = 0;
+    if (currentPage.includes("item_question.html")) {
+        initializeItemQuestionPage();
+    } else if (currentPage.includes("complete.html")) {
+        initializeCompletePage();
+    } else {
+        await initializeIndexPage();
+    }
+}
 
-        // 키워드 페어를 화면에 표시
-        displayKeywordPair();
+// 키워드쌍 처리 로직
+class KeywordManager {
+    constructor(keywords) {
+        this.keywordPairs = generateCombinations(keywords);
+        this.currentPairIndex = 0;
+        this.responseTimes = [];
+    }
 
-        // 가중치 선택 이벤트 리스너 등록
-        document.querySelectorAll('input[name="weight"]').forEach(radio => {
-            radio.addEventListener('click', function() {
-                console.log('Weight clicked:', radio.vaule);
-                handleWeightSubmit();
-            });
-        });
+    hasNextPair() {
+        return this.currentPairIndex < this.keywordPairs.length;
+    }
 
-        function handleWeightSubmit() {
-            const selectedWeight = document.querySelector('input[name="weight"]:checked');
-            
-            if (selectedWeight) {
-                const weightValue = parseInt(selectedWeight.value, 10);
-                const [keyword1, keyword2] = keywordPairs[currentPairIndex];
+    getNextPair() {
+        return this.keywordPairs[this.currentPairIndex++];
+    }
 
-                const k1Weight = weightValue < 0 ? Math.abs(weightValue) : 1 / Math.abs(weightValue);
-                const k2Weight = weightValue > 0 ? Math.abs(weightValue) : 1 / Math.abs(weightValue);
+    recordResponse(keyword1, keyword2, selectedKeyword, startTime) {
+        const responseTime = calculateResponseTime(startTime, recordLoadTime());
+        this.responseTimes.push({ keyword1, keyword2, selectedKeyword, responseTime });
+    }
 
-                weights.push({
-                    keyword1,
-                    k1Weight,
-                    keyword2,
-                    k2Weight
-                });
+    saveResponse() {
+        localStorage.setItem("keywordResponseTimes", JSON.stringify(this.responseTimes));
+    }
+}
 
-                currentPairIndex++;
-                if (currentPairIndex < keywordPairs.length) {
-                    displayKeywordPair();
-                } else {
-                    saveWeightsAndProceed();
-                }
-            } else {
-                alert("가중치를 선택해 주세요.");
-            }
-        }
+// index.html 초기화
+async function initializeIndexPage() {
+    const keywords = await loadKeywords();
+    const manager = new KeywordManager(keywords);
 
-        function displayKeywordPair() {
-            const [keyword1, keyword2] = keywordPairs[currentPairIndex];
-            document.getElementById('keyword1').innerText = keyword1;
-            document.getElementById('keyword2').innerText = keyword2;
+    const keyword1Element = document.getElementById("keyword1");
+    const keyword2Element = document.getElementById("keyword2");
 
-            const radioButtons = document.querySelectorAll('input[name="weight"]');
-            radioButtons.forEach(button => button.checked = false);
-        }
-
-        function saveWeightsAndProceed() {
-            localStorage.setItem('weights', JSON.stringify(weights));
-            window.location.href = 'item_question.html';
+    function displayNextPair() {
+        if (manager.hasNextPair()) {
+            const [keyword1, keyword2] = manager.getNextPair();
+            keyword1Element.textContent = keyword1;
+            keyword2Element.textContent = keyword2;
+            window.keywordStartTime = recordLoadTime();
+        } else {
+            manager.saveResponse();
+            window.location.href = "item_question.html";
         }
     }
 
-    // item_question.html에서 실행되는 코드
-    if (currentPage.includes('item_question.html')) {
-        const leftImage = document.getElementById('leftImage');
-        const rightImage = document.getElementById('rightImage');
-        let currentRound = 0;
-        let currentPairIndex = 0;
-        let imageLoadTime = 0;
-        const responseTimes = [];
-        const images = ['image1.jpg', 'image2.jpg', 'image3.jpg', 'image4.jpg'];
-        const imagePairs = generateCombinations(images);
-        const keywords = await loadKeywords();
-
-        if (leftImage && rightImage) {
-            leftImage.addEventListener('click', (event) => handleImageClick(event));
-            rightImage.addEventListener('click', (event) => handleImageClick(event));
-        }
-
-        function displayNextImagePair() {
-            const [leftSrc, rightSrc] = imagePairs[currentPairIndex];
-            leftImage.src = 'images/' + leftSrc;
-            rightImage.src = 'images/' + rightSrc;
-            document.getElementById('keyword').innerText = keywords[currentRound];
-            imageLoadTime = performance.now();
-        }
-
-        function handleImageClick(event) {
-            const clickTime = performance.now();
-            const responseTime = (clickTime - imageLoadTime) / 1000;
-            const [leftSrc, rightSrc] = imagePairs[currentPairIndex];
-            const selectedImage = event.target.id === 'leftImage' ? leftSrc : rightSrc;
-
-            responseTimes.push({
-                responseTime,
-                leftImage: leftSrc,
-                rightImage: rightSrc,
-                selectedImage: selectedImage,
-                keyword: keywords[currentRound]
-            });
-
-            console.log("Response Times Data:", responseTimes);
-
-            if (currentPairIndex < imagePairs.length - 1) {
-                currentPairIndex++;
-                displayNextImagePair();
-            } else {
-                if (currentRound < keywords.length - 1) {
-                    currentRound++;
-                    currentPairIndex = 0;
-                    displayNextImagePair();
-                } else {
-                    saveResults();
-                }
-            }
-        }
-
-        function saveResults() {
-            localStorage.setItem('responseTimes', JSON.stringify(responseTimes));
-            localStorage.setItem('keywords', JSON.stringify(keywords));
-            localStorage.setItem('images', JSON.stringify(images));
-            window.location.href = 'complete.html';
-        }
-
-        displayNextImagePair(); // 첫 번째 이미지 페어 표시
+    function handleKeywordClick(selectedKeyword) {
+        manager.recordResponse(keyword1Element.textContent, keyword2Element.textContent, selectedKeyword, window.keywordStartTime);
+        displayNextPair();
     }
 
-    // complete.html에서 실행되는 코드
-    if (currentPage.includes('complete.html')) {
-        const storedWeights = localStorage.getItem('weights');
-        const weights = storedWeights ? JSON.parse(storedWeights) : [];
-        console.log("Loaded Weights:", weights);
+    keyword1Element.addEventListener("click", () => handleKeywordClick(keyword1Element.textContent));
+    keyword2Element.addEventListener("click", () => handleKeywordClick(keyword2Element.textContent));
 
-        const storedResponseTimes = localStorage.getItem('responseTimes');
-        const responseTimes = storedResponseTimes ? JSON.parse(storedResponseTimes) : [];
-        console.log("Loaded Response Times:", responseTimes);
+    displayNextPair();
+}
 
-        const storedKeywords = localStorage.getItem('keywords');
-        const keywords = storedKeywords ? JSON.parse(storedKeywords) : await loadKeywords();
-        console.log("Loaded Keywords:", keywords);
+// item_question.html 초기화
+async function initializeItemQuestionPage() {
+    const leftImage = document.getElementById('leftImage');
+    const rightImage = document.getElementById('rightImage');
+    const imageResponseTimes = [];
+    const images = ['image1.jpg', 'image2.jpg', 'image3.jpg', 'image4.jpg'];
+    const imagePairs = generateCombinations(images);
+    const keywords = await loadKeywords();
 
-        const storedImages = localStorage.getItem('images');
-        const images = storedImages ? JSON.parse(storedImages) : [];
-        console.log("Loaded Images:", images);
+    let currentPairIndex = 0;
+    let currentRound = 0;
+    let imageLoadTime = 0;
 
-        if (!keywords || keywords.length === 0) {
-            console.warn("Keywords data is empty or undefined:", keywords);
-        }
-        if (!weights || weights.length === 0) {
-            console.warn("Weights data is empty or undefined:", weights);
-        }
-
-        const weightsMatrix = createComparisonMatrix(weights, keywords, "weight");
-        console.log("Weights Matrix:", weightsMatrix);
-
-        const keywordEigenvector = calculateEigenvector(weightsMatrix);
-        console.log("Keyword Eigenvector:", keywordEigenvector);
-
-        const keywordResponseEigenvector = keywords.map((keyword) => {
-            const keywordData = responseTimes.filter(time => time.keyword === keyword);
-            const responseMatrix = createComparisonMatrix(keywordData, images, "responseTime");
-
-            return calculateEigenvector(responseMatrix);
-        });
-
-        const imageScores = images.map((_, imgIndex) => {
-            return keywordResponseEigenvector.reduce((score, eigenvector, keywordIndex) => {
-                return score + eigenvector[imgIndex] * keywordEigenvector[keywordIndex];
-            }, 0);
-        });
-
-        document.getElementById('downloadXlsxBtn').addEventListener('click', function () {
-            const wb = XLSX.utils.book_new();
-        
-            // Unified Data 시트 데이터 배열
-            const unifiedSheetData = [];
-        
-            // Unified Data 시트 생성
-            unifiedSheetData.push(["Weight Matrix"]);
-            unifiedSheetData.push(["", ...keywords, "Eigenvector"]);
-            const weightMatrix = createComparisonMatrix(weights, keywords, "weight");
-            const weightEigenvector = calculateEigenvector(weightMatrix);
-            weightMatrix.forEach((row, i) => {
-                unifiedSheetData.push([keywords[i], ...row, weightEigenvector[i]]);
-            });
-        
-            unifiedSheetData.push([]); // 빈 줄
-        
-            unifiedSheetData.push(["Response Matrices"]);
-            const keywordResponseEigenvector = [];
-            keywords.forEach(keyword => {
-                unifiedSheetData.push([`Keyword: ${keyword}`]);
-                unifiedSheetData.push(["", "Image 1", "Image 2", "Image 3", "Image 4", "Eigenvector"]);
-        
-                const keywordData = responseTimes.filter(time => time.keyword === keyword);
-                const responseMatrix = createComparisonMatrix(keywordData, images, "responseTime");
-                const responseEigenvector = calculateEigenvector(responseMatrix);
-                keywordResponseEigenvector.push(responseEigenvector);
-        
-                responseMatrix.forEach((row, i) => {
-                    unifiedSheetData.push([`Image ${i + 1}`, ...row, responseEigenvector[i]]);
-                });
-        
-                unifiedSheetData.push(["Eigenvector", ...responseEigenvector]);
-                unifiedSheetData.push([]);
-            });
-        
-            unifiedSheetData.push(["Image Scores"]);
-            unifiedSheetData.push(["Image", ...keywords.flatMap(keyword => [keyword, `${keyword} 가중치`]), "Score"]);
-        
-            images.forEach((_, imgIndex) => {
-                const keywordFields = keywords.flatMap((_, keywordIndex) => {
-                    const responseValue = keywordResponseEigenvector[keywordIndex]?.[imgIndex] || 0;
-                    const weightValue = weightEigenvector[keywordIndex] || 0;
-                    return [responseValue, weightValue];
-                });
-        
-                const totalScore = keywords.reduce((sum, _, keywordIndex) => {
-                    const responseValue = keywordResponseEigenvector[keywordIndex]?.[imgIndex] || 0;
-                    const weightValue = weightEigenvector[keywordIndex] || 0;
-                    return sum + responseValue * weightValue;
-                }, 0);
-        
-                unifiedSheetData.push([`Image ${imgIndex + 1}`, ...keywordFields, totalScore]);
-            });
-        
-            const unifiedSheet = XLSX.utils.aoa_to_sheet(unifiedSheetData);
-            XLSX.utils.book_append_sheet(wb, unifiedSheet, "Unified Data");
-        
-            // Raw Data 시트 데이터 배열
-            const rawDataSheetData = [];
-        
-            // Raw Data 시트 생성
-            rawDataSheetData.push(["Keyword Weights"]);
-            rawDataSheetData.push(["Keyword 1", "K1 Weight", "Keyword 2", "K2 Weight"]);
-            weights.forEach(entry => {
-                rawDataSheetData.push([entry.keyword1, entry.k1Weight, entry.keyword2, entry.k2Weight]);
-            });
-        
-            rawDataSheetData.push([]); // 빈 줄 (가독성 확보)
-        
-            rawDataSheetData.push(["Response Times"]);
-            rawDataSheetData.push(["Response Time(s)", "Left Image", "Right Image", "Selected Image", "Keyword"]);
-            responseTimes.forEach(entry => {
-                rawDataSheetData.push([entry.responseTime, entry.leftImage, entry.rightImage, entry.selectedImage, entry.keyword]);
-            });
-        
-            rawDataSheetData.push([]); // 빈 줄 (가독성 확보)
-        
-            const rawDataSheet = XLSX.utils.aoa_to_sheet(rawDataSheetData);
-            XLSX.utils.book_append_sheet(wb, rawDataSheet, "Raw Data");
-        
-            // 파일 저장
-            XLSX.writeFile(wb, 'result_data.xlsx');
-        });        
+    function displayNextImagePair() {
+        const [leftSrc, rightSrc] = imagePairs[currentPairIndex];
+        leftImage.src = `images/${leftSrc}`;
+        rightImage.src = `images/${rightSrc}`;
+        document.getElementById('keyword').innerText = keywords[currentRound];
+        imageLoadTime = recordLoadTime();
     }
-});
+
+    function handleImageClick(selectedImage) {
+        const responseTime = calculateResponseTime(imageLoadTime, recordLoadTime());
+        const [leftSrc, rightSrc] = imagePairs[currentPairIndex];
+
+        imageResponseTimes.push({
+            responseTime,
+            leftImage: leftSrc,
+            rightImage: rightSrc,
+            selectedImage,
+            keyword: keywords[currentRound]
+        });
+
+        if (currentPairIndex < imagePairs.length - 1) {
+            currentPairIndex++;
+        } else if (currentRound < keywords.length - 1) {
+            currentRound++;
+            currentPairIndex = 0;
+        } else {
+            saveResults();
+            return;
+        }
+        displayNextImagePair();
+    }
+
+    function saveResults() {
+        localStorage.setItem('responseTimes', JSON.stringify(imageResponseTimes));
+        localStorage.setItem('keywords', JSON.stringify(keywords));
+        localStorage.setItem('images', JSON.stringify(images));
+        window.location.href = 'complete.html';
+    }
+
+    leftImage.addEventListener("click", () => handleImageClick(leftImage.src.split("/").pop()));
+    rightImage.addEventListener("click", () => handleImageClick(rightImage.src.split("/").pop()));
+
+    displayNextImagePair(); // 첫 번째 이미지 페어 표시
+}
+
+async function initializeCompletePage() {
+    const keywordResponseTimes = JSON.parse(localStorage.getItem("keywordResponseTimes") || "[]");
+    const imageResponseTimes = JSON.parse(localStorage.getItem("responseTimes") || "[]");
+    const keywords = JSON.parse(localStorage.getItem("keywords") || "[]");
+    const images = JSON.parse(localStorage.getItem("images") || "[]");
+
+    if (keywords.length === 0 || keywordResponseTimes.length === 0 || imageResponseTimes.length === 0 || images.length === 0) {
+        console.warn("One or more data sets are missing!");
+        return;
+    }
+
+    const keywordMatrix = createComparisonMatrix(keywordResponseTimes, keywords, "keywordResponseTimes")
+    const keywordEigenvector = calculateEigenvector(keywordMatrix);
+
+    const imageMatrices = {};
+    const imageEigenvectors = {};
+    keywords.forEach(keyword => {
+        const keywordData = imageResponseTimes.filter(entry => entry.keyword === keyword);
+        const matrix = createComparisonMatrix(keywordData, images, "imageResponseTimes");
+        const eigenvector = calculateEigenvector(matrix);
+        imageMatrices[keyword] = matrix;
+        imageEigenvectors[keyword] = eigenvector;
+    });
+
+    const imageScores = images.map((image, imageIndex) => {
+        return keywords.reduce((total, keyword, kIndex) => {
+            const value = imageEigenvectors[keyword]?.[imageIndex] || 0;
+            const weight = keywordEigenvector[kIndex] || 0;
+            return total + value * weight;
+        }, 0);
+    });
+
+    document.getElementById('downloadXlsxBtn').addEventListener('click', () => {
+        const wb = XLSX.utils.book_new();
+    
+        // 1. Unified Data 시트 데이터 배열
+        const unifiedSheetData = [];
+    
+        // 1-1. Keyword Comparison Matrix
+        unifiedSheetData.push(["Keyword Comparison Matrix"]);
+        unifiedSheetData.push(["", ...keywords, "Eigenvector"]);
+        keywordMatrix.forEach((row, i) => {
+            unifiedSheetData.push([keywords[i], ...row, keywordEigenvector[i]]);
+        });
+    
+        unifiedSheetData.push([]); // 빈 줄 (가독성 확보)
+    
+        // 1-2. Image Comparison Matrices
+        unifiedSheetData.push(["Image Comparison Matrix"]);
+        keywords.forEach(keyword => {
+            unifiedSheetData.push([`Comparison Matrix for ${keyword}`]);
+            unifiedSheetData.push(["", ...images, "Eigenvector"]);
+            const matrix = imageMatrices[keyword];
+            const eigenvector = imageEigenvectors[keyword];
+            matrix.forEach((row, i) => {
+                unifiedSheetData.push([images[i], ...row, eigenvector[i]]);
+            });
+            unifiedSheetData.push([]);
+        });
+
+        // 1-3. Image Scores
+        unifiedSheetData.push(["Image Scores"]);
+        unifiedSheetData.push([
+            "Image",
+            ...keywords.flatMap(keyword => [`Value for ${keyword}`, `Weight for ${keyword}`]),
+            "Score"
+        ]);
+        images.forEach((image, imgIndex) => {
+            const row = [image];
+            keywords.forEach((keyword, kIndex) => {
+                const value = imageEigenvectors[keyword]?.[imgIndex] || 0;
+                const weight = keywordEigenvector[kIndex] || 0;
+                row.push(value, weight);
+            });
+            row.push(imageScores[imgIndex]);
+            unifiedSheetData.push(row);
+        });
+
+        const unifiedSheet = XLSX.utils.aoa_to_sheet(unifiedSheetData);
+        XLSX.utils.book_append_sheet(wb, unifiedSheet, "Unified Data");
+    
+        // 2. Raw Data 시트 데이터 배열
+        const rawDataSheetData = [];
+    
+        // 2-1. Response Times: Keyword 생성
+        rawDataSheetData.push(["Response Times: Keyword"]);
+        rawDataSheetData.push(["Response Time(s)", "Keyword1", "Keyword2", "Selected Keyword"]);
+        keywordResponseTimes.forEach(entry => {
+            rawDataSheetData.push([
+                entry.responseTime.toFixed(4) || "N/A",
+                entry.keyword1 || "N/A",
+                entry.keyword2 || "N/A",
+                entry.selectedKeyword || "N/A"
+            ]);
+        });
+    
+        rawDataSheetData.push([]);
+    
+        // 2-2. Response Times: Images by Keyword 생성
+        rawDataSheetData.push(["Response Times: Images by Keyword"]);
+        rawDataSheetData.push(["Response Time(s)", "Left Image", "Right Image", "Selected Image", "Keyword"]);
+        imageResponseTimes.forEach(entry => {
+            rawDataSheetData.push([
+                entry.responseTime.toFixed(4) || "N/A",
+                entry.leftImage || "N/A",
+                entry.rightImage || "N/A",
+                entry.selectedImage || "N/A",
+                entry.keyword || "N/A"
+            ]);
+        });
+    
+        const rawDataSheet = XLSX.utils.aoa_to_sheet(rawDataSheetData);
+        XLSX.utils.book_append_sheet(wb, rawDataSheet, "Raw Data");
+    
+        // 파일 저장
+        XLSX.writeFile(wb, 'result_data.xlsx');
+    });
+}
+
+// DOMContenLoaded 이벤트로 초기화 시작
+window.addEventListener("DOMContentLoaded", initializePage);
