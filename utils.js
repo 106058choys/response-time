@@ -34,34 +34,32 @@ function normalizeResponseTimes(times) {
     });
 }
 
-// 비교 행렬 생성 (클릭한 아이템에 k 입력, 클릭하지 않은 아이템에 1/k 입력)
+// 비교 행렬 생성 (클릭한 아이템에 정규화한 k 입력, 클릭하지 않은 아이템에 1/k 입력)
 function createComparisonMatrix(data, items, type) {
     const n = items.length;
     const matrix = Array.from({ length: n }, () => Array(n).fill(1));
 
-    // 데이터 유형별 필드 매핑
-    let left, right, selectedItem, time;
+    // 타입별 필드 매핑
+    const fieldMapping = {
+        keywordResponseTimes: { left: "keyword1", right: "keyword2", selectedItem: "selectedKeyword", time: "responseTime" },
+        imageResponseTimes: { left: "leftImage", right: "rightImage", selectedItem: "selectedImage", time: "responseTime" }
+    };
 
-    if (type === "keywordResponseTimes") {
-        left = "keyword1";
-        right = "keyword2";
-        selectedItem = "selectedKeyword";
-        time = "responseTime";
-    } else if (type === "imageResponseTimes") {
-        left = "leftImage";
-        right = "rightImage";
-        selectedItem = "selectedImage";
-        time = "responseTime";
-    } else {
+    const { left, right, selectedItem, time } = fieldMapping[type] || {};
+
+    if (!left || !right || !selectedItem || !time) {
         console.error(`Invalid type: ${type}`);
         return matrix;
     }
 
-    // 비교 행렬 작성
-    data.forEach(entry => {
+    // 정규화된 값 계산
+    const rawTimes = data.map(entry => entry[time]).filter(Boolean); // 유효한 시간값만 추출
+    const normalizedTimes = normalizeResponseTimes(rawTimes); // 정규화 실행
+
+    data.forEach((entry, index) => {
         const i = items.indexOf(entry[left]);
         const j = items.indexOf(entry[right]);
-        const value = entry[time] || 1; // 기본값 처리
+        const value = normalizedTimes[index] || 1; // 정규화된 값을 사용
         const selected = entry[selectedItem];
 
         if (i !== -1 && j !== -1 && i !== j) {
@@ -73,7 +71,6 @@ function createComparisonMatrix(data, items, type) {
 
     return matrix;
 }
-
 
 // 고유벡터 계산
 function calculateEigenvector(matrix) {
