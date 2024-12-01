@@ -15,7 +15,9 @@ async function loadKeywords() {
 async function initializePage() {
     const currentPage = window.location.pathname;
 
-    if (currentPage.includes("item_question.html")) {
+    if (currentPage.includes("keyword_question.html")) {
+        initializeKeywordQuestionPage();
+    } else if (currentPage.includes("item_question.html")) {
         initializeItemQuestionPage();
     } else if (currentPage.includes("complete.html")) {
         initializeCompletePage();
@@ -52,6 +54,12 @@ class KeywordManager {
 
 // index.html 초기화
 async function initializeIndexPage() {
+    document.getElementById('title').textContent = '구매 기준 가중치 평가';
+    document.getElementById('description').textContent = '내용을 입력해주세요.';
+}
+
+// keyword_question.html 초기화
+async function initializeKeywordQuestionPage() {
     const keywords = await loadKeywords();
     const manager = new KeywordManager(keywords);
 
