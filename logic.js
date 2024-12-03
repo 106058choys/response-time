@@ -11,21 +11,6 @@ async function loadKeywords() {
     }
 }
 
-// 페이지 초기화
-async function initializePage() {
-    const currentPage = window.location.pathname;
-
-    if (currentPage.includes("keyword_question.html")) {
-        initializeKeywordQuestionPage();
-    } else if (currentPage.includes("item_question.html")) {
-        initializeItemQuestionPage();
-    } else if (currentPage.includes("complete.html")) {
-        initializeCompletePage();
-    } else {
-        await initializeIndexPage();
-    }
-}
-
 // 키워드쌍 처리 로직
 class KeywordManager {
     constructor(keywords) {
@@ -52,61 +37,147 @@ class KeywordManager {
     }
 }
 
+// 페이지 초기화
+async function initializePage() {
+    const currentPage = window.location.pathname;
+
+    if (currentPage.includes("complete.html")) {
+        initializeCompletePage();
+    } else if (currentPage.includes("item_question.html")) {
+        initializeItemQuestionPage();
+    } else if (currentPage.includes("keyword_start.html")) {
+        initializeKeywordStartPage();
+    } else if (currentPage.includes("keyword_question.html")) {
+        initializeKeywordQuestionPage();
+    } else {
+        await initializeIndexPage();
+    }
+}
+
 // index.html 초기화
 async function initializeIndexPage() {
-    document.getElementById('title').textContent = '구매 기준 가중치 평가';
-    document.getElementById('description').textContent = '내용을 입력해주세요.';
+    document.addEventListener("DOMContentLoaded", () => {
+        const titleElement = document.getElementById('title');
+        const descriptionElement = document.getElementById('description');
+
+        if (titleElement && descriptionElement) {
+            titleElement.textContent = '구매 기준 가중치 평가';
+            descriptionElement.textContent = "내용을 입력해 주세요.";
+        } else {
+            console.error('Required elements are missing in index.html');
+        }
+    });
 }
 
 // keyword_question.html 초기화
 async function initializeKeywordQuestionPage() {
     const keywords = await loadKeywords();
-    const manager = new KeywordManager(keywords);
+    if (keywords.length === 0) {
+        console.error("No keywords found.");
+        document.getElementById('keyword1').textContent = "키워드가 없습니다.";
+        document.getElementById('keyword2').textContent = "관리자에게 문의하세요.";
+        return;
+    }
 
-    const keyword1Element = document.getElementById("keyword1");
-    const keyword2Element = document.getElementById("keyword2");
+    // 키워드 쌍 생성 및 표시
+    const keywordPairs = generateCombinations(keywords);
+    let currentPairIndex = 0;
+    let isProcessing = false; // 중복 처리 방지 플래그
 
-    function displayNextPair() {
-        if (manager.hasNextPair()) {
-            const [keyword1, keyword2] = manager.getNextPair();
-            keyword1Element.textContent = keyword1;
-            keyword2Element.textContent = keyword2;
-            window.keywordStartTime = recordLoadTime();
-        } else {
-            manager.saveResponse();
-            window.location.href = "item_question.html";
+    function displayNextKeywordPair() {
+        if (currentPairIndex >= keywordPairs.length) {
+            // 모든 키워드 쌍이 끝났으면 keyword_start.html로 이동
+            window.location.href = "keyword_start.html";
+            return;
         }
+
+        const [keyword1, keyword2] = keywordPairs[currentPairIndex];
+        document.getElementById('keyword1').textContent = keyword1;
+        document.getElementById('keyword2').textContent = keyword2;
+
+        window.startTime = recordLoadTime();
     }
 
+    // 키워드 클릭 이벤트
     function handleKeywordClick(selectedKeyword) {
-        manager.recordResponse(keyword1Element.textContent, keyword2Element.textContent, selectedKeyword, window.keywordStartTime);
-        displayNextPair();
+        if (isProcessing) return;
+        isProcessing = true;
+        
+        // 현재 키워드 쌍의 선택 결과 기록
+        const [keyword1, keyword2] = keywordPairs[currentPairIndex];
+        const clickTime = recordLoadTime();
+        const responseTime = calculateResponseTime(window.startTime || clickTime, clickTime);
+
+        // 기록 저장
+        const responseTimes = JSON.parse(localStorage.getItem('keywordResponseTimes') || '[]');
+
+        const isDuplicate = responseTimes.some(
+            (entry) => entry.keyword1 === keyword1 && entry.keyword2 === keyword2 && entry.selectedKeyword === selectedKeyword
+        );
+
+        if (!isDuplicate) {
+            responseTimes.push({
+                keyword1,
+                keyword2,
+                selectedKeyword,
+                responseTime
+            });
+            localStorage.setItem('keywordResponseTimes', JSON.stringify(responseTimes));
+        }
+
+        // 다음 키워드 쌍으로 이동
+        currentPairIndex++;
+        displayNextKeywordPair();
+        
+        isProcessing = false;
     }
 
-    keyword1Element.addEventListener("click", () => handleKeywordClick(keyword1Element.textContent));
-    keyword2Element.addEventListener("click", () => handleKeywordClick(keyword2Element.textContent));
+    // 이벤트 리스너 초기화
+    document.getElementById('keyword1').addEventListener.onclick = null;
+    document.getElementById('keyword2').addEventListener.onclick = null;
 
-    displayNextPair();
+    // 이벤트 리스너 추가
+    document.getElementById('keyword1').addEventListener('click', () => handleKeywordClick(document.getElementById('keyword1').textContent));
+    document.getElementById('keyword2').addEventListener('click', () => handleKeywordClick(document.getElementById('keyword2').textContent));
+
+    // 첫 번째 키워드 쌍 표시
+    displayNextKeywordPair();
+}
+
+async function initializeKeywordStartPage() {
+    const keywords = await loadKeywords();
+    const currentKeywordIndex = parseInt(localStorage.getItem('currentKeywordIndex') || '0', 10);
+
+    if (currentKeywordIndex >= keywords.length) {
+        window.location.href = 'complete.html';
+        return;
+    }
+
+    const currentKeyword = keywords[currentKeywordIndex] || '키워드';
+    document.getElementById('keyword-message').textContent = `"${currentKeyword}"에 대해 측정을 시작합니다.`;
+    document.getElementById('start-button').addEventListener('click', () => {
+        window.location.href = 'item_question.html';
+    });
 }
 
 // item_question.html 초기화
 async function initializeItemQuestionPage() {
     const leftImage = document.getElementById('leftImage');
     const rightImage = document.getElementById('rightImage');
-    const imageResponseTimes = [];
+    const imageResponseTimes = JSON.parse(localStorage.getItem('responseTimes') || '[]');
     const images = ['image1.jpg', 'image2.jpg', 'image3.jpg', 'image4.jpg'];
     const imagePairs = generateCombinations(images);
     const keywords = await loadKeywords();
 
     let currentPairIndex = 0;
-    let currentRound = 0;
+    let currentKeywordIndex = parseInt(localStorage.getItem("currentKeywordIndex") || "0", 10);
     let imageLoadTime = 0;
 
     function displayNextImagePair() {
         const [leftSrc, rightSrc] = imagePairs[currentPairIndex];
         leftImage.src = `images/${leftSrc}`;
         rightImage.src = `images/${rightSrc}`;
-        document.getElementById('keyword').innerText = keywords[currentRound];
+        document.getElementById('keyword').innerText = keywords[currentKeywordIndex];
         imageLoadTime = recordLoadTime();
     }
 
@@ -119,32 +190,42 @@ async function initializeItemQuestionPage() {
             leftImage: leftSrc,
             rightImage: rightSrc,
             selectedImage,
-            keyword: keywords[currentRound]
+            keyword: keywords[currentKeywordIndex]
         });
 
         if (currentPairIndex < imagePairs.length - 1) {
+            // 현재 키워드의 다음 이미지 쌍으로 이동
             currentPairIndex++;
-        } else if (currentRound < keywords.length - 1) {
-            currentRound++;
-            currentPairIndex = 0;
+        } else if (currentKeywordIndex < keywords.length - 1) {
+            // 다음 키워드로 이동
+            currentKeywordIndex++;
+            localStorage.setItem("currentKeywordIndex", currentKeywordIndex);
+            localStorage.setItem("responseTimes", JSON.stringify(imageResponseTimes));
+            window.location.href = "keyword_start.html";
+            return;
         } else {
-            saveResults();
+            saveResults(imageResponseTimes, keywords, images);
             return;
         }
         displayNextImagePair();
-    }
-
-    function saveResults() {
-        localStorage.setItem('responseTimes', JSON.stringify(imageResponseTimes));
-        localStorage.setItem('keywords', JSON.stringify(keywords));
-        localStorage.setItem('images', JSON.stringify(images));
-        window.location.href = 'complete.html';
     }
 
     leftImage.addEventListener("click", () => handleImageClick(leftImage.src.split("/").pop()));
     rightImage.addEventListener("click", () => handleImageClick(rightImage.src.split("/").pop()));
 
     displayNextImagePair(); // 첫 번째 이미지 페어 표시
+}
+
+function saveResults(imageResponseTimes, keywords, images) {
+    localStorage.setItem('responseTimes', JSON.stringify(imageResponseTimes));
+    localStorage.setItem('keywords', JSON.stringify(keywords));
+    localStorage.setItem('images', JSON.stringify(images));
+    window.location.href = 'complete.html';
+}
+
+function restartTest() {
+    localStorage.clear();
+    window.location.href = "index.html";
 }
 
 async function initializeCompletePage() {
@@ -264,6 +345,8 @@ async function initializeCompletePage() {
         // 파일 저장
         XLSX.writeFile(wb, 'result_data.xlsx');
     });
+
+    document.getElementById('restartTestBtn').addEventListener('click', restartTest);
 }
 
 // DOMContenLoaded 이벤트로 초기화 시작
